@@ -9,11 +9,24 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status });
 }
 
+/**
+ * Summarises an error for logs using only its name and code. The message is left out on purpose:
+ * driver errors can echo connection strings or other secrets.
+ */
+export function describeError(error: unknown): { name: string; code?: string } {
+  if (error instanceof Error) {
+    const code = (error as { code?: unknown }).code;
+    return { name: error.name, ...(typeof code === "string" ? { code } : {}) };
+  }
+  return { name: "UnknownError" };
+}
+
 export async function health(deps: Deps): Promise<Response> {
   try {
     await deps.db.execute(sql`SELECT 1`);
     return json({ status: "ok" });
-  } catch {
+  } catch (error) {
+    console.error("health: database check failed", describeError(error));
     return json({ status: "error" }, 503);
   }
 }

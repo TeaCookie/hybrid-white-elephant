@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { createTestDeps, jsonRequest } from "../../tests/support";
 import { createGame, getGame, health } from "./handlers";
@@ -17,6 +17,25 @@ describe("GET /api/health", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: "ok" });
+  });
+});
+
+describe("GET /api/health when the database is unreachable", () => {
+  it("reports an error and logs only the error name and code, never its message", async () => {
+    const failing = Object.assign(new Error("connect failed for postgres://user:secret@host/db"), {
+      code: "ECONNREFUSED",
+    });
+    const brokenDeps = { ...deps, db: { execute: async () => Promise.reject(failing) } as unknown as typeof deps.db };
+    const logged: unknown[][] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args) => void logged.push(args));
+
+    const response = await health(brokenDeps);
+    spy.mockRestore();
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ status: "error" });
+    expect(JSON.stringify(logged)).toContain("ECONNREFUSED");
+    expect(JSON.stringify(logged)).not.toContain("secret");
   });
 });
 
