@@ -49,7 +49,13 @@ describe("creating and reading a game", () => {
 
     expect(created.status).toBe(201);
     const { id, board } = await created.json();
-    expect(board).toEqual({ created: true, name: "Office exchange", version: 1 });
+    expect(board).toEqual({
+      created: true,
+      name: "Office exchange",
+      version: 1,
+      helpers: [],
+      turnHolder: null,
+    });
 
     const fetched = await getGame(deps, id);
     expect(fetched.status).toBe(200);
