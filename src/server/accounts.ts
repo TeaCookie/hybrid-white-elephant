@@ -139,27 +139,25 @@ export async function verifyEmail(deps: Deps, request: Request): Promise<Respons
   return json({ status: "verified" });
 }
 
-/** Counts a wrong password, and locks the account when the count reaches the limit. */
-async function recordFailedLogin(deps: Deps, hostId: string): Promise<void> {
-  const now = deps.now();
-  await deps.db.transaction(async (tx) => {
-    const [host] = await tx
-      .select({ failed: hosts.failedLoginCount, lockedUntil: hosts.lockedUntil })
-      .from(hosts)
-      .where(eq(hosts.id, hostId))
-      .for("update");
-    if (!host) return;
-    // A lockout that has run out starts the count again from this failure.
-    const expired = host.lockedUntil !== null && host.lockedUntil <= now;
-    const failed = (expired ? 0 : host.failed) + 1;
-    await tx
-      .update(hosts)
-      .set({
-        failedLoginCount: failed,
-        lockedUntil: failed >= MAX_FAILED_LOGINS ? new Date(now.getTime() + LOCKOUT_MS) : expired ? null : host.lockedUntil,
-      })
-      .where(eq(hosts.id, hostId));
-  });
+/**
+ * Counts this attempt before the password is checked, in one atomic statement, so a burst of parallel
+ * guesses cannot get past the limit. Returns false while the account is locked. The count is cleared
+ * again by a successful login.
+ */
+async function reserveLoginAttempt(deps: Deps, hostId: string): Promise<boolean> {
+  const now = deps.now().toISOString();
+  const lockUntil = new Date(deps.now().getTime() + LOCKOUT_MS).toISOString();
+  const rows = await deps.db.execute(sql`
+    UPDATE hosts SET
+      failed_login_count = CASE WHEN locked_until IS NOT NULL THEN 1 ELSE failed_login_count + 1 END,
+      locked_until = CASE
+        WHEN (CASE WHEN locked_until IS NOT NULL THEN 1 ELSE failed_login_count + 1 END) >= ${MAX_FAILED_LOGINS}
+        THEN ${lockUntil}::timestamptz
+        ELSE NULL
+      END
+    WHERE id = ${hostId} AND (locked_until IS NULL OR locked_until <= ${now}::timestamptz)
+    RETURNING id`);
+  return rows.length > 0;
 }
 
 export async function logIn(deps: Deps, request: Request): Promise<Response> {
@@ -176,15 +174,14 @@ export async function logIn(deps: Deps, request: Request): Promise<Response> {
   }
 
   const now = deps.now();
-  if (host.lockedUntil && host.lockedUntil > now) {
-    const retryAfter = Math.ceil((host.lockedUntil.getTime() - now.getTime()) / 1000);
+  if (!(await reserveLoginAttempt(deps, host.id))) {
+    const [current] = await deps.db.select({ lockedUntil: hosts.lockedUntil }).from(hosts).where(eq(hosts.id, host.id));
+    const until = current?.lockedUntil?.getTime() ?? now.getTime() + LOCKOUT_MS;
+    const retryAfter = Math.max(1, Math.ceil((until - now.getTime()) / 1000));
     return json({ error: "too-many-attempts" }, 429, { "retry-after": String(retryAfter) });
   }
 
-  if (!(await verifyPassword(host.passwordHash, password))) {
-    await recordFailedLogin(deps, host.id);
-    return invalid();
-  }
+  if (!(await verifyPassword(host.passwordHash, password))) return invalid();
   if (!host.emailVerifiedAt) return json({ error: "email-not-verified" }, 403);
 
   const token = newToken();

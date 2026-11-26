@@ -29,8 +29,12 @@ CREATE TABLE "hosts" (
 	CONSTRAINT "hosts_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint
--- Games had no owner before host accounts and no route could create them, so any existing rows are orphans.
-DELETE FROM "games";--> statement-breakpoint
+-- Games had no host before host accounts, and no route could create them. Refuse to guess if any exist.
+DO $$ BEGIN
+	IF EXISTS (SELECT 1 FROM "games") THEN
+		RAISE EXCEPTION 'games already has rows and no host to own them; remove them or assign a host before migrating';
+	END IF;
+END $$;--> statement-breakpoint
 ALTER TABLE "games" ADD COLUMN "host_id" uuid NOT NULL;--> statement-breakpoint
 ALTER TABLE "host_sessions" ADD CONSTRAINT "host_sessions_host_id_hosts_id_fk" FOREIGN KEY ("host_id") REFERENCES "public"."hosts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "host_tokens" ADD CONSTRAINT "host_tokens_host_id_hosts_id_fk" FOREIGN KEY ("host_id") REFERENCES "public"."hosts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

@@ -208,6 +208,16 @@ describe("logging in", () => {
     expect(locked.headers.get("retry-after")).toBe("900");
   });
 
+  it("allows no more than five guesses even when they arrive at the same moment", async () => {
+    await signUpAndVerify();
+
+    const responses = await Promise.all(Array.from({ length: 20 }, () => login("wrong password")));
+
+    const checked = responses.filter((r) => r.status === 401).length;
+    expect(checked).toBe(5);
+    expect(responses.filter((r) => r.status === 429)).toHaveLength(15);
+  });
+
   it("lets the host back in once the lockout has passed", async () => {
     await signUpAndVerify();
     for (let i = 0; i < 5; i++) await login("wrong password");
