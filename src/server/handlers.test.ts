@@ -1,12 +1,16 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
+import { hosts } from "@/db/schema";
 import { createTestDeps, jsonRequest } from "../../tests/support";
 import { createGame, getGame, health } from "./handlers";
 
 const { deps, close } = createTestDeps();
+let hostId: string;
 
 beforeEach(async () => {
-  await deps.db.execute(sql`TRUNCATE games CASCADE`);
+  await deps.db.execute(sql`TRUNCATE hosts CASCADE`);
+  const [host] = await deps.db.insert(hosts).values({ email: "host@example.com", passwordHash: "unused" }).returning({ id: hosts.id });
+  hostId = host!.id;
 });
 
 afterAll(() => close());
@@ -41,7 +45,7 @@ describe("GET /api/health when the database is unreachable", () => {
 
 describe("creating and reading a game", () => {
   it("creates a game and returns its board", async () => {
-    const created = await createGame(deps, jsonRequest("/api/games", "POST", { name: "Office exchange" }));
+    const created = await createGame(deps, hostId, jsonRequest("/api/games", "POST", { name: "Office exchange" }));
 
     expect(created.status).toBe(201);
     const { id, board } = await created.json();
@@ -53,7 +57,7 @@ describe("creating and reading a game", () => {
   });
 
   it("rejects a blank name without storing anything", async () => {
-    const response = await createGame(deps, jsonRequest("/api/games", "POST", { name: "  " }));
+    const response = await createGame(deps, hostId, jsonRequest("/api/games", "POST", { name: "  " }));
 
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: "name-required" });
@@ -64,7 +68,7 @@ describe("creating and reading a game", () => {
   it("rejects a body that is not valid JSON", async () => {
     const request = new Request("http://localhost/api/games", { method: "POST", body: "not json" });
 
-    const response = await createGame(deps, request);
+    const response = await createGame(deps, hostId, request);
 
     expect(response.status).toBe(400);
   });
@@ -82,7 +86,7 @@ describe("creating and reading a game", () => {
   });
 
   it("keeps the event log append-only: the created event is stored with its sequence number", async () => {
-    const created = await createGame(deps, jsonRequest("/api/games", "POST", { name: "Office exchange" }));
+    const created = await createGame(deps, hostId, jsonRequest("/api/games", "POST", { name: "Office exchange" }));
     const { id } = await created.json();
 
     const rows = await deps.db.execute(sql`SELECT seq, type FROM game_events WHERE game_id = ${id}`);

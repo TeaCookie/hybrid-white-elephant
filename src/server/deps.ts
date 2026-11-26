@@ -8,4 +8,6 @@ export type Deps = {
   email: EmailSender;
   photos: PhotoStorage;
   now: () => Date;
+  /** Public origin of the app, used to build links in emails. No trailing slash. */
+  baseUrl: string;
 };
