@@ -9,7 +9,7 @@ export function createTestDeps(now = new Date("2026-12-08T09:00:00Z")) {
   const { db, close } = createDb(inject("testDatabaseUrl"));
   const email = new FakeEmailSender();
   const photos = new FakePhotoStorage();
-  const deps: Deps = { db, email, photos, now: () => now };
+  const deps: Deps = { db, email, photos, now: () => now, baseUrl: "http://localhost:3000" };
   return { deps, email, photos, close };
 }
 

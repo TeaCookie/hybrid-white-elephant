@@ -41,10 +41,10 @@ async function loadHistory(deps: Deps, gameId: string): Promise<GameEvent[]> {
 }
 
 /**
- * Not routed yet: creating a game needs a signed-in host, which arrives with host accounts.
+ * Not routed yet: the route that calls this with the signed-in host arrives with game creation.
  * The handler exists now so the engine, event log and database are exercised end to end.
  */
-export async function createGame(deps: Deps, request: Request): Promise<Response> {
+export async function createGame(deps: Deps, hostId: string, request: Request): Promise<Response> {
   let body: unknown;
   try {
     body = await request.json();
@@ -63,7 +63,7 @@ export async function createGame(deps: Deps, request: Request): Promise<Response
   if (!decision.ok) return json({ error: decision.reason }, 422);
 
   const id = await deps.db.transaction(async (tx) => {
-    const [game] = await tx.insert(games).values({}).returning({ id: games.id });
+    const [game] = await tx.insert(games).values({ hostId }).returning({ id: games.id });
     if (!game) throw new Error("game insert returned no row");
     await tx.insert(gameEvents).values(
       decision.events.map((event, index) => ({
@@ -79,7 +79,7 @@ export async function createGame(deps: Deps, request: Request): Promise<Response
   return json({ id, board: deriveBoard(decision.events) }, 201);
 }
 
-/** Not routed yet: reading a game needs a signed-in member, which arrives with host accounts and invites. */
+/** Not routed yet: reading a game needs a signed-in member, which arrives with invites. */
 export async function getGame(deps: Deps, id: string): Promise<Response> {
   if (!UUID.test(id)) return json({ error: "not-found" }, 404);
   const history = await loadHistory(deps, id);
