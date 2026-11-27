@@ -96,7 +96,7 @@ export function deriveBoard(history: readonly GameEvent[]): Board {
 }
 
 /** Whether the actor may issue this kind of command against this board. */
-export function authorize(actor: Actor, type: CommandType, board: Board): "not-permitted" | "self-oversight" | null {
+export function checkPermission(actor: Actor, type: CommandType, board: Board): "not-permitted" | "self-oversight" | null {
   const rule = PERMISSIONS[type];
   if (!rule.roles[actor.role]) return "not-permitted";
   if (rule.oversight && board.turnHolder === actor.memberId) return "self-oversight";
@@ -106,7 +106,7 @@ export function authorize(actor: Actor, type: CommandType, board: Board): "not-p
 export function decide({ history, command, version, actor, now }: DecideInput): Decision {
   const board = deriveBoard(history);
 
-  const denied = authorize(actor, command.type, board);
+  const denied = checkPermission(actor, command.type, board);
   if (denied) return { ok: false, reason: denied };
 
   if (version !== board.version) return { ok: false, reason: "stale-version", board };

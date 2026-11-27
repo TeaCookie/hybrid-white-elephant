@@ -27,6 +27,13 @@ const inProgress: GameEvent[] = [
   { type: "TurnStarted", memberId: "player-2", at },
 ];
 
+const appointHelper2: Command = { type: "AppointHelper", memberId: "helper-2" };
+
+/** The in-progress game with the turn handed to someone else. */
+function withTurn(memberId: string): GameEvent[] {
+  return [...inProgress, { type: "TurnStarted", memberId, at }];
+}
+
 function run(command: Command, actor: Actor, history: readonly GameEvent[] = [], version = history.length) {
   return decide({ history, command, version, actor, now });
 }
@@ -51,14 +58,14 @@ describe("engine: creating a game", () => {
 
 describe("engine: appointing helpers", () => {
   it("emits a HelperAppointed event", () => {
-    expect(run({ type: "AppointHelper", memberId: "helper-2" }, host, [created])).toEqual({
+    expect(run(appointHelper2, host, [created])).toEqual({
       ok: true,
       events: [{ type: "HelperAppointed", memberId: "helper-2", at }],
     });
   });
 
   it("rejects appointing before the game exists", () => {
-    expect(run({ type: "AppointHelper", memberId: "helper-2" }, host)).toEqual({
+    expect(run(appointHelper2, host)).toEqual({
       ok: false,
       reason: "game-not-created",
     });
@@ -73,7 +80,7 @@ describe("engine: appointing helpers", () => {
 
   it("rejects appointing the same helper twice", () => {
     const history: GameEvent[] = [created, { type: "HelperAppointed", memberId: "helper-2", at }];
-    expect(run({ type: "AppointHelper", memberId: "helper-2" }, host, history)).toEqual({
+    expect(run(appointHelper2, host, history)).toEqual({
       ok: false,
       reason: "already-helper",
     });
@@ -117,11 +124,11 @@ describe("engine: board derived from the event log", () => {
 
 describe("engine: stale versions", () => {
   it("accepts a command based on the current version", () => {
-    expect(run({ type: "AppointHelper", memberId: "helper-2" }, host, inProgress, 3).ok).toBe(true);
+    expect(run(appointHelper2, host, inProgress, 3).ok).toBe(true);
   });
 
   it("rejects a command based on an older version, returning the latest board", () => {
-    expect(run({ type: "AppointHelper", memberId: "helper-2" }, host, inProgress, 1)).toEqual({
+    expect(run(appointHelper2, host, inProgress, 1)).toEqual({
       ok: false,
       reason: "stale-version",
       board: deriveBoard(inProgress),
@@ -129,7 +136,7 @@ describe("engine: stale versions", () => {
   });
 
   it("rejects a command claiming a version from the future", () => {
-    expect(run({ type: "AppointHelper", memberId: "helper-2" }, host, inProgress, 99)).toMatchObject({
+    expect(run(appointHelper2, host, inProgress, 99)).toMatchObject({
       ok: false,
       reason: "stale-version",
     });
@@ -161,7 +168,7 @@ describe("engine: permission table", () => {
   /** One valid command per type, for a game in progress. */
   const commands: Record<CommandType, Command> = {
     CreateGame: { type: "CreateGame", name: "New game" },
-    AppointHelper: { type: "AppointHelper", memberId: "helper-2" },
+    AppointHelper: appointHelper2,
     ConfirmPick: { type: "ConfirmPick" },
   };
 
@@ -196,18 +203,18 @@ describe("engine: permission table", () => {
 
 describe("engine: nobody oversees their own turn", () => {
   it("stops a helper confirming their own turn", () => {
-    const history: GameEvent[] = [...inProgress, { type: "TurnStarted", memberId: "helper-1", at }];
+    const history: GameEvent[] = withTurn("helper-1");
     expect(run({ type: "ConfirmPick" }, helper, history)).toEqual({ ok: false, reason: "self-oversight" });
   });
 
   it("stops a playing host confirming their own turn", () => {
-    const history: GameEvent[] = [...inProgress, { type: "TurnStarted", memberId: "host-1", at }];
+    const history: GameEvent[] = withTurn("host-1");
     expect(run({ type: "ConfirmPick" }, host, history)).toEqual({ ok: false, reason: "self-oversight" });
   });
 
   it("lets the host confirm while a helper has the turn, and the reverse", () => {
-    const helperTurn: GameEvent[] = [...inProgress, { type: "TurnStarted", memberId: "helper-1", at }];
-    const hostTurn: GameEvent[] = [...inProgress, { type: "TurnStarted", memberId: "host-1", at }];
+    const helperTurn: GameEvent[] = withTurn("helper-1");
+    const hostTurn: GameEvent[] = withTurn("host-1");
     expect(run({ type: "ConfirmPick" }, host, helperTurn)).toEqual({ ok: false, reason: "no-pending-pick" });
     expect(run({ type: "ConfirmPick" }, helper, hostTurn)).toEqual({ ok: false, reason: "no-pending-pick" });
   });
@@ -222,19 +229,19 @@ describe("engine: nobody oversees their own turn", () => {
   });
 
   it("does not turn a non-oversight command into a self-oversight rejection", () => {
-    const history: GameEvent[] = [...inProgress, { type: "TurnStarted", memberId: "host-1", at }];
-    expect(run({ type: "AppointHelper", memberId: "helper-2" }, host, history).ok).toBe(true);
+    const history: GameEvent[] = withTurn("host-1");
+    expect(run(appointHelper2, host, history).ok).toBe(true);
   });
 
   it("reports not-permitted rather than self-oversight to a role that may never oversee", () => {
-    const history: GameEvent[] = [...inProgress, { type: "TurnStarted", memberId: "player-1", at }];
+    const history: GameEvent[] = withTurn("player-1");
     expect(run({ type: "ConfirmPick" }, player, history)).toEqual({ ok: false, reason: "not-permitted" });
   });
 });
 
 describe("engine: purity", () => {
   it("takes time from its input and gives the same answer for the same input", () => {
-    const command: Command = { type: "AppointHelper", memberId: "helper-2" };
+    const command: Command = appointHelper2;
     const later = new Date("2027-01-01T00:00:00Z");
 
     const first = decide({ history: inProgress, command, version: 3, actor: host, now });
@@ -248,7 +255,7 @@ describe("engine: purity", () => {
 
   it("does not modify the history it is given", () => {
     const history = Object.freeze([...inProgress]);
-    expect(() => run({ type: "AppointHelper", memberId: "helper-2" }, host, history)).not.toThrow();
+    expect(() => run(appointHelper2, host, history)).not.toThrow();
     expect(history).toEqual(inProgress);
   });
 });
