@@ -42,6 +42,8 @@ export const games = pgTable("games", {
   hostId: uuid("host_id")
     .notNull()
     .references(() => hosts.id, { onDelete: "cascade" }),
+  /** Set when the game ends. A game with no end date is active and counts toward the host's limit of three. */
+  endedAt: timestamp("ended_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

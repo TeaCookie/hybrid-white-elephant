@@ -40,9 +40,22 @@ _Avoid_: Last round, redo
 A player's place in the original seeded random shuffle that sets the turn order. It is permanent, even if a player is later pushed to the end of the order, and it decides final-swap eligibility.
 _Avoid_: Turn number, rank, seed (the seed is the shuffle's input, not a position)
 
+**Rules**:
+The house settings the host chooses for one game: steal limit, immediate steal-back, repeat-steal from the same person, maximum steals per chain, early locking, final-swap percentage, timezone, working days and hours, reminder time and deadline length (one working day unless set otherwise). The final-swap percentage is visible to everyone from the start.
+_Avoid_: Settings, config, options
+
+**Rule version**:
+One numbered snapshot of the **Rules**. The game starts at version 1 and every edit saves the next number. A version applies only to what happens after it; earlier actions are never re-read under new rules, and a host fixes any past effect by hand. The final-swap percentage is the one rule that cannot change once the last regular turn begins.
+_Avoid_: Revision, rule set
+
+**Active game**:
+A game that has not ended. A host may have at most three at once; a second, separate game is allowed alongside the first.
+_Avoid_: Open game, live game
+
 ## Relationships
 
 - A **Host** creates a game and appoints zero or more **Helpers**; every **Player** has exactly one seat in exactly one game.
+- A game has one current **Rule version**; the **Host** alone edits the **Rules**, and each edit adds a new version going forward only.
 - A **Gift** is brought by one **Player**, and that tag stays hidden from players until the reveal at the end.
 - A **Pending pick** turns into a held **Gift** when a **Helper** or the **Host** confirms it; the person confirming is never the player whose turn it is.
 - A **Steal** increases a **Gift**'s steal count; reaching the limit applies a **Lock**.
