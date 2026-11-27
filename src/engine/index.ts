@@ -123,6 +123,8 @@ export type Rejection =
   | "self-oversight"
   | "no-changes"
   | "final-swap-frozen"
+  | "name-too-long"
+  | "unknown-rule"
   | "invalid-rules"
   | "invalid-steal-limit"
   | "invalid-max-steals-per-chain"
@@ -164,6 +166,7 @@ export const PERMISSIONS: Record<CommandType, { roles: Record<Role, boolean>; ov
 
 const TIME_OF_DAY = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 
+const MAX_NAME_LENGTH = 100;
 const MIN_STEAL_LIMIT = 1;
 const MAX_STEAL_LIMIT = 10;
 const MAX_DEADLINE_WORKING_DAYS = 10;
@@ -172,8 +175,12 @@ function isTimeOfDay(value: unknown): value is TimeOfDay {
   return typeof value === "string" && TIME_OF_DAY.test(value);
 }
 
+/** An IANA zone name such as "America/Vancouver", or "UTC". Abbreviations ("EST") and offsets ("+05:00") are not accepted. */
+const IANA_ZONE = /^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)+$/;
+
 function isTimezone(value: unknown): boolean {
-  if (typeof value !== "string" || value === "") return false;
+  if (typeof value !== "string") return false;
+  if (value !== "UTC" && !IANA_ZONE.test(value)) return false;
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: value });
     return true;
@@ -184,6 +191,12 @@ function isTimezone(value: unknown): boolean {
 
 function isInteger(value: unknown, min: number, max: number): boolean {
   return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max;
+}
+
+/** Whether the host's changes name a rule that does not exist. */
+function hasUnknownRule(changes: unknown): boolean {
+  if (changes === null || typeof changes !== "object") return false;
+  return Object.keys(changes).some((key) => !Object.hasOwn(DEFAULT_RULES, key));
 }
 
 /** Lays the host's changes over a set of rules. Unknown keys and undefined values are ignored; the days come out sorted. */
@@ -340,6 +353,8 @@ export function decide({ history, command, version, actor, now }: DecideInput): 
       if (board.created) return { ok: false, reason: "already-created" };
       const name = command.name.trim();
       if (name === "") return { ok: false, reason: "name-required" };
+      if (name.length > MAX_NAME_LENGTH) return { ok: false, reason: "name-too-long" };
+      if (hasUnknownRule(command.rules)) return { ok: false, reason: "unknown-rule" };
       const rules = mergeRules(DEFAULT_RULES, command.rules);
       const problem = validateRules(rules);
       if (problem) return { ok: false, reason: problem };
@@ -347,6 +362,7 @@ export function decide({ history, command, version, actor, now }: DecideInput): 
     }
     case "UpdateRules": {
       if (!board.created) return { ok: false, reason: "game-not-created" };
+      if (hasUnknownRule(command.changes)) return { ok: false, reason: "unknown-rule" };
       const rules = mergeRules(board.rules, command.changes);
       const problem = validateRules(rules);
       if (problem) return { ok: false, reason: problem };

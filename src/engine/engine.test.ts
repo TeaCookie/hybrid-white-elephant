@@ -108,6 +108,8 @@ describe("engine: creating a game", () => {
       [{ finalSwapPercent: 12.5 }, "invalid-final-swap-percent"],
       [{ timezone: "Mars/Olympus" }, "invalid-timezone"],
       [{ timezone: "" }, "invalid-timezone"],
+      [{ timezone: "EST" }, "invalid-timezone"],
+      [{ timezone: "+05:00" }, "invalid-timezone"],
       [{ workingDays: [] }, "invalid-working-days"],
       [{ workingDays: [1, 1] }, "invalid-working-days"],
       [{ workingDays: [7] as never }, "invalid-working-days"],
@@ -125,6 +127,23 @@ describe("engine: creating a game", () => {
     for (const [rules, reason] of bad) {
       expect(run({ type: "CreateGame", name: "G", rules }, host), JSON.stringify(rules)).toEqual({ ok: false, reason });
     }
+  });
+
+  it("accepts real IANA timezones, including UTC", () => {
+    for (const timezone of ["UTC", "America/Vancouver", "America/Argentina/Buenos_Aires", "Europe/London"]) {
+      expect(run({ type: "CreateGame", name: "G", rules: { timezone } }, host), timezone).toMatchObject({ ok: true });
+    }
+  });
+
+  it("rejects a rule it does not know instead of ignoring it, so a typo cannot pass silently", () => {
+    const typo = { stealLimt: 2 } as unknown as Partial<Rules>;
+    expect(run({ type: "CreateGame", name: "G", rules: typo }, host)).toEqual({ ok: false, reason: "unknown-rule" });
+    expect(run({ type: "UpdateRules", changes: typo }, host, [created])).toEqual({ ok: false, reason: "unknown-rule" });
+  });
+
+  it("rejects a name longer than 100 characters, and accepts exactly 100", () => {
+    expect(run({ type: "CreateGame", name: "x".repeat(101) }, host)).toEqual({ ok: false, reason: "name-too-long" });
+    expect(run({ type: "CreateGame", name: "x".repeat(100) }, host).ok).toBe(true);
   });
 
   it("accepts no cap on steals per chain", () => {

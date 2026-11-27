@@ -178,10 +178,18 @@ describe("creating a game with rules", () => {
     expect(await response.json()).toEqual({ error: "invalid-rules" });
   });
 
-  it("ignores rule names it does not know", async () => {
-    const { board } = await (await create("Office exchange", { stealLimit: 2, hostIsKing: true })).json();
+  it("rejects a rule name it does not know, so a typo is not silently dropped", async () => {
+    const response = await create("Office exchange", { stealLimt: 2 });
 
-    expect(board.rules).toEqual({ ...DEFAULT_RULES, stealLimit: 2 });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "unknown-rule" });
+  });
+
+  it("rejects a name over 100 characters", async () => {
+    const response = await create("x".repeat(101));
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "name-too-long" });
   });
 
   it("stores the rules inside the GameCreated event, as the start of the log", async () => {
@@ -380,6 +388,15 @@ describe("editing the rules", () => {
 
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: "invalid-timezone" });
+  });
+
+  it("rejects an unknown rule name instead of reporting no change", async () => {
+    const id = await createdId();
+
+    const response = await edit(id, 1, { stealLimt: 2 });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "unknown-rule" });
   });
 
   it("rejects a change that changes nothing, so no empty version is saved", async () => {
