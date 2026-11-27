@@ -57,7 +57,8 @@ export async function createGame(deps: Deps, hostId: string, request: Request): 
   const decision = decide({
     history: [],
     command: { type: "CreateGame", name },
-    actor: { role: "host" },
+    version: 0,
+    actor: { memberId: hostId, role: "host" },
     now: deps.now(),
   });
   if (!decision.ok) return json({ error: decision.reason }, 422);
