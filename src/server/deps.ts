@@ -1,6 +1,7 @@
 import type { Db } from "@/db/client";
 import type { EmailSender } from "@/ports/email";
 import type { PhotoStorage } from "@/ports/photo-storage";
+import type { EmailKeys } from "./member-crypto";
 
 /** Everything a request handler needs from the outside world. Tests pass fakes for email and photos. */
 export type Deps = {
@@ -10,4 +11,6 @@ export type Deps = {
   now: () => Date;
   /** Public origin of the app, used to build links in emails. No trailing slash. */
   baseUrl: string;
+  /** Secrets for encrypting and looking up members' email addresses. Never logged. */
+  emailKeys: EmailKeys;
 };

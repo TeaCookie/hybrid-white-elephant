@@ -37,7 +37,7 @@ export async function health(deps: Deps): Promise<Response> {
   }
 }
 
-async function loadHistory(db: Pick<Transaction, "select">, gameId: string): Promise<GameEvent[]> {
+export async function loadHistory(db: Pick<Transaction, "select">, gameId: string): Promise<GameEvent[]> {
   const rows = await db
     .select({ payload: gameEvents.payload })
     .from(gameEvents)
@@ -60,7 +60,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /** A rejected decision as an HTTP response: a stale version is a conflict that carries the latest board. */
-function rejection(decision: Extract<Decision, { ok: false }>): Response {
+export function rejection(decision: Extract<Decision, { ok: false }>): Response {
   if (decision.reason === "stale-version") return json({ error: decision.reason, board: decision.board }, 409);
   return json({ error: decision.reason }, 422);
 }

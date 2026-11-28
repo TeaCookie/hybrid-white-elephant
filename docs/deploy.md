@@ -10,6 +10,7 @@ Target: Vercel (free plan) with Neon Postgres (free plan).
 4. Add the host-account settings, also for Production and Preview:
    - `APP_URL`: the public origin used in emailed links, e.g. `https://<your-app>.vercel.app` (falls back to Vercel's production domain if unset).
    - `RESEND_API_KEY` and `EMAIL_FROM`: a Resend API key and a verified sender such as `Hybrid White Elephant <hello@yourdomain>`.
+   - `EMAIL_ENCRYPTION_KEY` and `EMAIL_LOOKUP_KEY`: two different secrets protecting players' email addresses (one encrypts them, the other makes the lookup hash and opt-out links). Each is 32 random bytes, base64-encoded: `openssl rand -base64 32`. Keep them out of logs and backups; losing the encryption key makes stored addresses unreadable, and changing the lookup key breaks existing opt-out links and duplicate-invite detection.
 5. Apply migrations to the Neon database from your machine:
 
    ```bash

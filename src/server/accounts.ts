@@ -30,7 +30,7 @@ function text(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function normaliseEmail(value: unknown): string | null {
+export function normaliseEmail(value: unknown): string | null {
   const email = text(value).trim().toLowerCase();
   return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
 }
