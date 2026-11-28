@@ -3,6 +3,7 @@ import { createDb } from "@/db/client";
 import type { EmailSender } from "@/ports/email";
 import type { PhotoStorage } from "@/ports/photo-storage";
 import type { Deps } from "./deps";
+import type { EmailKeys } from "./member-crypto";
 
 function notConfigured(what: string): never {
   throw new Error(`${what} adapter is not configured yet`);
@@ -30,6 +31,18 @@ function productionBaseUrl(): string {
   return origin.replace(/\/+$/, "");
 }
 
+function secretKey(name: string): Buffer {
+  const value = process.env[name];
+  const key = value ? Buffer.from(value, "base64") : null;
+  if (!key || key.length !== 32) throw new Error(`${name} must be 32 random bytes, base64-encoded`);
+  return key;
+}
+
+/** Read on first use, so the health check needs only DATABASE_URL. */
+function productionEmailKeys(): EmailKeys {
+  return { encryptionKey: secretKey("EMAIL_ENCRYPTION_KEY"), lookupKey: secretKey("EMAIL_LOOKUP_KEY") };
+}
+
 let cached: Deps | undefined;
 
 /** Dependencies for the deployed app. The database connection is created once per server instance. */
@@ -45,6 +58,9 @@ export function productionDeps(): Deps {
     now: () => new Date(),
     get baseUrl() {
       return productionBaseUrl();
+    },
+    get emailKeys() {
+      return productionEmailKeys();
     },
   };
   return cached;
