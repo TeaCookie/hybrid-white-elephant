@@ -1,6 +1,6 @@
 import { OptOutConfirm } from "./optout-confirm";
 
-export const metadata = { title: "Email choices · Hybrid White Elephant" };
+export const metadata = { title: "Email choices · Hybrid White Elephant", referrer: "no-referrer" as const };
 
 export default async function OptOutPage({
   searchParams,

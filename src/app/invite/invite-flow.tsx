@@ -13,7 +13,12 @@ export function InviteFlow({ token }: { token: string }) {
   useEffect(() => {
     void (async () => {
       const response = await fetch(`/api/invites/preview?token=${encodeURIComponent(token)}`);
-      if (!response.ok) return setStep("invalid");
+      if (!response.ok) {
+        // A used link is fine if this device already holds the seat: pick up at the name step if it was skipped.
+        const me = await fetch("/api/me");
+        if (!me.ok) return setStep("invalid");
+        return setStep((await me.json()).displayName == null ? "name" : "done");
+      }
       setGameName((await response.json()).gameName);
       setStep("continue");
     })();

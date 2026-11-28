@@ -1,6 +1,7 @@
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { hosts, hostSessions, hostTokens } from "@/db/schema";
 import type { Deps } from "./deps";
+import { buildCookie, readCookie } from "./http";
 import { hashPassword, hashToken, newToken, verifyAgainstDummy, verifyPassword } from "./passwords";
 
 export const SESSION_COOKIE = "hwe_session";
@@ -42,16 +43,11 @@ function passwordProblem(password: string): "password-too-short" | "password-too
 }
 
 function sessionCookie(deps: Deps, value: string, maxAgeSeconds: number): string {
-  const secure = deps.baseUrl.startsWith("https://") ? "; Secure" : "";
-  return `${SESSION_COOKIE}=${value}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeSeconds}${secure}`;
+  return buildCookie(deps, SESSION_COOKIE, value, maxAgeSeconds);
 }
 
 function readSessionToken(request: Request): string | null {
-  for (const part of (request.headers.get("cookie") ?? "").split(";")) {
-    const [name, ...value] = part.trim().split("=");
-    if (name === SESSION_COOKIE && value.length > 0) return value.join("=");
-  }
-  return null;
+  return readCookie(request, SESSION_COOKIE);
 }
 
 async function issueToken(deps: Deps, hostId: string, kind: "verify-email" | "reset-password", lifetimeMs: number) {

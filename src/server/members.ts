@@ -6,6 +6,7 @@ import type { Deps } from "./deps";
 import { loadHistory, rejection } from "./handlers";
 import { decryptEmail, emailLookupHash, encryptEmail, verifyOptOutToken, type OptOutKind } from "./member-crypto";
 import { sendToMember } from "./member-mail";
+import { buildCookie, json, readCookie, readObject, UUID } from "./http";
 import { hashToken, newToken } from "./passwords";
 
 const MAX_INVITES_PER_REQUEST = 50;
@@ -14,21 +15,6 @@ const SESSION_MS = 90 * 24 * 60 * 60 * 1000;
 const MAX_DISPLAY_NAME = 40;
 
 export const MEMBER_COOKIE = "hwe_member";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function json(body: unknown, status = 200, headers?: HeadersInit): Response {
-  return Response.json(body, { status, headers });
-}
-
-async function readObject(request: Request): Promise<Record<string, unknown> | null> {
-  try {
-    const body: unknown = await request.json();
-    return body !== null && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
 
 export type InviteStatus = "invited" | "resent" | "already-joined" | "emails-stopped" | "invalid";
 
@@ -107,19 +93,6 @@ export async function inviteMembers(deps: Deps, hostId: string, gameId: string, 
   return json({ results });
 }
 
-function memberCookie(deps: Deps, value: string, maxAgeSeconds: number): string {
-  const secure = deps.baseUrl.startsWith("https://") ? "; Secure" : "";
-  return `${MEMBER_COOKIE}=${value}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeSeconds}${secure}`;
-}
-
-function readMemberToken(request: Request): string | null {
-  for (const part of (request.headers.get("cookie") ?? "").split(";")) {
-    const [name, ...value] = part.trim().split("=");
-    if (name === MEMBER_COOKIE && value.length > 0) return value.join("=");
-  }
-  return null;
-}
-
 export type CurrentMember = {
   id: string;
   gameId: string;
@@ -129,7 +102,7 @@ export type CurrentMember = {
 
 /** The member a request's session cookie belongs to, or null when there is none, it expired, or the seat was removed. */
 export async function currentMember(deps: Deps, request: Request): Promise<CurrentMember | null> {
-  const token = readMemberToken(request);
+  const token = readCookie(request, MEMBER_COOKIE);
   if (!token) return null;
   const [row] = await deps.db
     .select({ id: members.id, gameId: members.gameId, displayName: members.displayName, plays: members.plays })
@@ -203,7 +176,7 @@ export async function claimInvite(deps: Deps, request: Request): Promise<Respons
 
   const [member] = await deps.db.select({ displayName: members.displayName }).from(members).where(eq(members.id, memberId));
   return json({ memberId, needsDisplayName: member?.displayName == null }, 200, {
-    "set-cookie": memberCookie(deps, sessionToken, SESSION_MS / 1000),
+    "set-cookie": buildCookie(deps, MEMBER_COOKIE, sessionToken, SESSION_MS / 1000),
   });
 }
 
